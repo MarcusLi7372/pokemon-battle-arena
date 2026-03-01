@@ -371,7 +371,7 @@ function showOnlineLobby(mode) {
         dom.joinConnectBtn.textContent = 'Connected!';
       },
       onSlotAssigned(slot) {
-        myBattlePlayer = slot <= 2 ? 1 : 2;
+        myBattlePlayer = mode === '2v2' ? (slot <= 2 ? 1 : 2) : slot;
         addLog('Connected as Player ' + slot, 'log-system');
       },
       onLobbyUpdate(slots) {
@@ -447,7 +447,7 @@ function renderLobbySlots(container, mode, slots) {
 // ---- Online team selection (each player on own device) ----
 function startOnlineTeamSelection(mode) {
   const slot   = OnlineGame.getMySlot();
-  const maxPer = mode === '2v2' ? 3 : 6;
+  const maxPer = 6;
   const user   = Auth.getCurrentUser();
 
   state.teams = { 1: [], 2: [] };
@@ -493,7 +493,7 @@ function checkAllOnlineTeamsReady(mode) {
     state.teams[2] = [...(teams[3] || []), ...(teams[4] || [])];
     // Figure out which pokemon range I own
     const slot = OnlineGame.getMySlot();
-    myPokemonRange = (slot === 1 || slot === 3) ? [0, 2] : [3, 5];
+    myPokemonRange = (slot === 1 || slot === 3) ? [0, 5] : [6, 11];
   }
   startBattle();
 }
@@ -986,15 +986,16 @@ function executeMove(player, moveIndex) {
     applyStatusDamage(player).forEach(m => addLog(m.msg, m.css));
     updateBattleUI();
 
-    // Broadcast state for online
-    if (gameMode !== 'local' && OnlineGame.getIsHost()) {
-      OnlineGame.broadcastTurnResult(state.battle.log.slice(0, 20), serializeBattleState());
-    }
-
     setTimeout(() => {
       if (activeHp(player) <= 0)   handleFaint(player);
       else if (activeHp(defender) <= 0) handleFaint(defender);
-      else switchTurn();
+      else {
+        switchTurn();
+        // Broadcast AFTER switchTurn so guests receive the correct next turn
+        if (gameMode !== 'local' && OnlineGame.getIsHost()) {
+          OnlineGame.broadcastTurnResult(state.battle.log.slice(0, 20), serializeBattleState());
+        }
+      }
     }, 400);
   }, 200);
 }
@@ -1070,13 +1071,13 @@ function hideOnlineWaiting() {
 // ============================================================
 function handleGuestMove(slot, index) {
   // Host received a move from a guest — apply it
-  const guestBattlePlayer = slot <= 2 ? 1 : 2;
+  const guestBattlePlayer = gameMode === 'online-2v2' ? (slot <= 2 ? 1 : 2) : slot;
   if (guestBattlePlayer !== state.battle.turn) return; // out-of-order, ignore
   executeMove(guestBattlePlayer, index);
 }
 
 function handleGuestSwitch(slot, index) {
-  const guestBattlePlayer = slot <= 2 ? 1 : 2;
+  const guestBattlePlayer = gameMode === 'online-2v2' ? (slot <= 2 ? 1 : 2) : slot;
   const oldName = activePokemon(guestBattlePlayer).name;
   state.battle.active[guestBattlePlayer] = index;
   addLog(`Player ${slot} switched ${oldName} → ${activePokemon(guestBattlePlayer).name}!`, `log-p${guestBattlePlayer}`);
@@ -1103,27 +1104,13 @@ function applyOnlineTurnResult(logs, bState) {
   updateBattleUI();
   hideOnlineWaiting();
 
-  // Check faint
-  const t = state.battle.turn === 1 ? 2 : 1; // who just moved
-  const def = state.battle.turn;
-  if (state.battle.hp[def][state.battle.active[def]] <= 0) {
-    if (!hasLivingPokemon(def)) {
-      // Let host handle endBattle broadcast
-      return;
-    }
-    // Show switch required for this device
-    if (myBattlePlayer === def) {
-      showSwitchRequired(def, (idx) => { OnlineGame.sendSwitch(idx); });
-    }
-  } else {
-    // Our turn?
-    const mySlot = OnlineGame.getMySlot();
-    const controller = OnlineGame.getActiveController(
-      state.battle.turn, state.battle.active[state.battle.turn], gameMode === 'online-2v2'
-    );
-    if (mySlot === controller) showMoveButtons();
-    else showOnlineWaiting();
-  }
+  // Determine if it's our turn to move (faint/switch handled via SWITCH_REQUIRED)
+  const mySlot = OnlineGame.getMySlot();
+  const controller = OnlineGame.getActiveController(
+    state.battle.turn, state.battle.active[state.battle.turn], gameMode === 'online-2v2'
+  );
+  if (mySlot === controller) showMoveButtons();
+  else showOnlineWaiting();
 }
 
 function serializeBattleState() {
@@ -1166,25 +1153,29 @@ function handleFaint(faintedPlayer) {
         switchTurn();
       });
     } else {
-      const mySlot = OnlineGame.getMySlot();
-      const myBP   = myBattlePlayer;
-      if (myBP === faintedPlayer) {
-        // It's our pokemon that fainted — we switch
-        showSwitchRequired(faintedPlayer, (idx) => {
-          if (OnlineGame.getIsHost()) {
+      const myBP = myBattlePlayer;
+      if (OnlineGame.getIsHost()) {
+        if (myBP === faintedPlayer) {
+          // Host's own pokemon fainted — host switches, then broadcasts next turn
+          showSwitchRequired(faintedPlayer, (idx) => {
             state.battle.active[faintedPlayer] = idx;
             addLog(`Sent out ${activePokemon(faintedPlayer).name}!`, `log-p${faintedPlayer}`);
-            OnlineGame.broadcastTurnResult(state.battle.log.slice(0,20), serializeBattleState());
             updateBattleUI();
             state.battle.phase = 'select-move';
-            switchTurn();
-          } else {
-            OnlineGame.sendSwitch(idx);
-            showOnlineWaiting();
-          }
-        });
+            switchTurn(); // Update turn first
+            OnlineGame.broadcastTurnResult(state.battle.log.slice(0, 20), serializeBattleState());
+          });
+        } else {
+          // Guest's pokemon fainted — tell guest to switch
+          const faintedSlot = gameMode === 'online-2v2'
+            ? OnlineGame.getActiveController(faintedPlayer, state.battle.active[faintedPlayer], true)
+            : faintedPlayer;
+          OnlineGame.broadcastTurnResult(state.battle.log.slice(0, 20), serializeBattleState());
+          OnlineGame.broadcastSwitchRequired(faintedPlayer, faintedSlot);
+          showOnlineWaiting();
+        }
       } else {
-        showOnlineWaiting();
+        showOnlineWaiting(); // Guest waits for SWITCH_REQUIRED callback
       }
     }
   }, 600);

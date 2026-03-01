@@ -339,9 +339,9 @@ const OnlineGame = (() => {
    *  return which slot (1-4) should be picking the move. */
   function getActiveController(battlePlayer, activePokemonIndex, gameMode2v2) {
     if (!gameMode2v2) return battlePlayer; // 1v1: player is the controller
-    // 2v2: first 3 pokemon = lead, last 3 = teammate
-    if (battlePlayer === 1) return activePokemonIndex < 3 ? 1 : 2;
-    else                    return activePokemonIndex < 3 ? 3 : 4;
+    // 2v2: each player picks 6 pokemon, first 6 = lead slot, last 6 = support slot
+    if (battlePlayer === 1) return activePokemonIndex < 6 ? 1 : 2;
+    else                    return activePokemonIndex < 6 ? 3 : 4;
   }
 
   // ---- Cleanup ----------------------------------------------
