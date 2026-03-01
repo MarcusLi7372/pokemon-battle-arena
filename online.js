@@ -20,7 +20,27 @@ const OnlineGame = (() => {
   // ---- Helpers ----------------------------------------------
   const PEER_CONFIG = {
     host: '0.peerjs.com', port: 443, path: '/', secure: true,
-    config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] }
+    config: {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:openrelay.metered.ca:80' },
+        {
+          urls: 'turn:openrelay.metered.ca:80',
+          username: 'openrelayproject',
+          credential: 'openrelayproject'
+        },
+        {
+          urls: 'turn:openrelay.metered.ca:443',
+          username: 'openrelayproject',
+          credential: 'openrelayproject'
+        },
+        {
+          urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+          username: 'openrelayproject',
+          credential: 'openrelayproject'
+        }
+      ]
+    }
   };
 
   function genCode() {
