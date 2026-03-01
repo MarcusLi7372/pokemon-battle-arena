@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc -l /c/Users/Administrator/Documents/GitHub/pokemon-battle-arena/*.js /c/Users/Administrator/Documents/GitHub/pokemon-battle-arena/*.css)",
+      "Bash(python -m http.server 8080 --bind 127.0.0.1)",
+      "Bash(start http://127.0.0.1:8080)"
+    ]
+  }
+}
