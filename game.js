@@ -249,6 +249,20 @@ function initModeScreen() {
     gameMode = 'online-2v2';
     showOnlineLobby('2v2');
   });
+
+  // 1v1 vs AI
+  document.getElementById('mode-ai-1v1').addEventListener('click', () => {
+    gameMode = 'ai-1v1';
+    state.teams = { 1: [], 2: [] };
+    startPlayerSelection(1);
+  });
+
+  // 2v2 vs AI (2 humans on same device vs 2 AIs)
+  document.getElementById('mode-ai-2v2').addEventListener('click', () => {
+    gameMode = 'ai-2v2';
+    state.teams = { 1: [], 2: [] };
+    startPlayerSelection(1);
+  });
 }
 
 // ============================================================
@@ -703,13 +717,33 @@ function initSelectionScreen() {
     renderPokemonGrid(); renderTeamSlots(); updateSelectionUI();
   });
 
-  // Local mode confirm ready
+  // Local / AI mode confirm ready
   dom.confirmReadyBtn.addEventListener('click', () => {
-    if (gameMode !== 'local') return; // online has its own handler
-    if (state.currentPlayer === 1) {
-      showHandoffOverlay(2, () => startPlayerSelection(2));
-    } else {
+    if (gameMode === 'online-1v1' || gameMode === 'online-2v2') return; // online has its own handler
+
+    if (gameMode === 'ai-1v1') {
+      // Human done — generate AI team and start
+      state.teams[2] = pickAiTeam(6);
       showHandoffOverlay('battle', () => startBattle());
+
+    } else if (gameMode === 'ai-2v2') {
+      if (state.currentPlayer === 1) {
+        // P1 done, let P2 pick
+        showHandoffOverlay(2, () => startPlayerSelection(2));
+      } else {
+        // Both humans done — combine into team 1, generate AI team 2
+        state.teams[1] = [...state.teams[1], ...state.teams[2]];
+        state.teams[2] = pickAiTeam(12);
+        showHandoffOverlay('battle', () => startBattle());
+      }
+
+    } else {
+      // Local 2-player
+      if (state.currentPlayer === 1) {
+        showHandoffOverlay(2, () => startPlayerSelection(2));
+      } else {
+        showHandoffOverlay('battle', () => startBattle());
+      }
     }
   });
 }
@@ -735,6 +769,55 @@ function showHandoffOverlay(next, callback) {
 }
 
 // ============================================================
+// ===  AI HELPERS  ===========================================
+// ============================================================
+function pickAiTeam(size) {
+  const shuffled = [...POKEMON_LIST].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, size).map(p => ({
+    ...p, moves: getMovesForPokemon(p.type1, p.type2)
+  }));
+}
+
+function isAiPlayer(player) {
+  if (gameMode === 'ai-1v1') return player === 2;
+  if (gameMode === 'ai-2v2') return player === 2;
+  return false;
+}
+
+function aiPickSwitch(player) {
+  const alive = state.battle.hp[player]
+    .map((hp, idx) => ({ hp, idx }))
+    .filter(({ hp, idx }) => hp > 0 && idx !== state.battle.active[player]);
+  if (alive.length === 0) return null;
+  return alive[Math.floor(Math.random() * alive.length)].idx;
+}
+
+function executeAiTurn(player) {
+  if (state.battle.phase !== 'select-move') return;
+  const pk       = activePokemon(player);
+  const defender = player === 1 ? 2 : 1;
+  const defPk    = activePokemon(defender);
+
+  // Score moves: prefer high power + type effectiveness + STAB; add randomness
+  const scores = pk.moves.map((move, i) => {
+    let score = 20; // base value for status moves
+    if (move.power > 0) {
+      const moveType    = detectMoveType(move, pk);
+      const effectiveness = getTypeEffectiveness(moveType, defPk.type1, defPk.type2);
+      const stab        = (moveType === pk.type1 || moveType === pk.type2) ? 1.5 : 1;
+      score = move.power * effectiveness * stab;
+    }
+    score *= 0.75 + Math.random() * 0.5; // ±25% noise so AI isn't perfectly optimal
+    return { i, score };
+  });
+  scores.sort((a, b) => b.score - a.score);
+
+  // 70% best move, 30% random
+  const moveIdx = Math.random() < 0.7 ? scores[0].i : scores[Math.floor(Math.random() * scores.length)].i;
+  executeMove(player, moveIdx);
+}
+
+// ============================================================
 // ===  BATTLE INITIALIZATION  ================================
 // ============================================================
 function startBattle() {
@@ -753,6 +836,14 @@ function startBattle() {
     dom.p1PlayerLabel.textContent = 'Player 1';
     dom.p2PlayerLabel.textContent = 'Player 2';
     dom.battleSubtitle.textContent = 'HP · ATK · DEF shown with stage modifiers';
+  } else if (gameMode === 'ai-1v1') {
+    dom.p1PlayerLabel.textContent = 'You';
+    dom.p2PlayerLabel.textContent = '🤖 AI';
+    dom.battleSubtitle.textContent = 'Beat the AI!';
+  } else if (gameMode === 'ai-2v2') {
+    dom.p1PlayerLabel.textContent = 'Human Team';
+    dom.p2PlayerLabel.textContent = '🤖 AI Team';
+    dom.battleSubtitle.textContent = 'Co-op vs AI — Player 1 controls slots 1–6, Player 2 controls slots 7–12';
   } else {
     const slot = OnlineGame.getMySlot();
     dom.battleSubtitle.textContent = `You are Player ${slot}`;
@@ -763,6 +854,11 @@ function startBattle() {
   addLog(`⚔️ Battle Start! P1 sends ${activePokemon(1).name}! P2 sends ${activePokemon(2).name}!`, 'log-system');
 
   if (gameMode === 'local') {
+    showBattleHandoff(1, () => { updateBattleUI(); showMoveButtons(); });
+  } else if (gameMode === 'ai-1v1') {
+    showMoveButtons(); // Human always goes first
+  } else if (gameMode === 'ai-2v2') {
+    // Sub-player 1 always controls the first active pokemon (index 0)
     showBattleHandoff(1, () => { updateBattleUI(); showMoveButtons(); });
   } else {
     // Online: host picks first, others wait
@@ -992,7 +1088,7 @@ function executeMove(player, moveIndex) {
       else {
         switchTurn();
         // Broadcast AFTER switchTurn so guests receive the correct next turn
-        if (gameMode !== 'local' && OnlineGame.getIsHost()) {
+        if ((gameMode === 'online-1v1' || gameMode === 'online-2v2') && OnlineGame.getIsHost()) {
           OnlineGame.broadcastTurnResult(state.battle.log.slice(0, 20), serializeBattleState());
         }
       }
@@ -1009,6 +1105,21 @@ function switchTurn() {
 
   if (gameMode === 'local') {
     showBattleHandoff(state.battle.turn, () => { updateBattleUI(); showMoveButtons(); });
+  } else if (gameMode === 'ai-1v1') {
+    updateBattleUI();
+    if (state.battle.turn === 1) {
+      showMoveButtons();
+    } else {
+      setTimeout(() => executeAiTurn(2), 700);
+    }
+  } else if (gameMode === 'ai-2v2') {
+    updateBattleUI();
+    if (state.battle.turn === 2) {
+      setTimeout(() => executeAiTurn(2), 700);
+    } else {
+      const sub = state.battle.active[1] < 6 ? 1 : 2;
+      showBattleHandoff(sub, () => { updateBattleUI(); showMoveButtons(); });
+    }
   } else {
     updateBattleUI();
     const nextTurn = state.battle.turn;
@@ -1037,10 +1148,12 @@ function switchTurn() {
 }
 
 function showBattleHandoff(player, callback) {
-  if (gameMode !== 'local') { callback(); return; }
+  if (gameMode !== 'local' && gameMode !== 'ai-2v2') { callback(); return; }
+  // In ai-2v2 "player" is the human sub-player (1 or 2); active pokemon is always from team 1
+  const pkName = gameMode === 'ai-2v2' ? activePokemon(1).name : activePokemon(player).name;
   dom.confirmMsg.innerHTML = `
     <strong>Player ${player}'s Turn!</strong><br><br>
-    Your active Pokemon: <strong>${activePokemon(player).name}</strong><br>
+    Your active Pokemon: <strong>${pkName}</strong><br>
     <small style="color:#aaa">Look away, Player ${player === 1 ? 2 : 1}!</small>
   `;
   dom.confirmBtn.textContent = `Ready, Player ${player}!`;
@@ -1136,7 +1249,9 @@ function handleFaint(faintedPlayer) {
   if (!hasLivingPokemon(faintedPlayer)) {
     const winner = faintedPlayer === 1 ? 2 : 1;
     setTimeout(() => {
-      if (gameMode !== 'local' && OnlineGame.getIsHost()) OnlineGame.broadcastGameOver(winner);
+      if ((gameMode === 'online-1v1' || gameMode === 'online-2v2') && OnlineGame.getIsHost()) {
+        OnlineGame.broadcastGameOver(winner);
+      }
       endBattle(winner);
     }, 800);
     return;
@@ -1145,6 +1260,7 @@ function handleFaint(faintedPlayer) {
   state.battle.phase = 'switch-required';
   setTimeout(() => {
     if (gameMode === 'local') {
+      // Local: show switch UI for the fainted player
       showSwitchRequired(faintedPlayer, (idx) => {
         state.battle.active[faintedPlayer] = idx;
         addLog(`Sent out ${activePokemon(faintedPlayer).name}!`, `log-p${faintedPlayer}`);
@@ -1152,7 +1268,47 @@ function handleFaint(faintedPlayer) {
         state.battle.phase = 'select-move';
         switchTurn();
       });
+
+    } else if (gameMode === 'ai-1v1' || gameMode === 'ai-2v2') {
+      if (isAiPlayer(faintedPlayer)) {
+        // AI picks its next pokemon automatically
+        const idx = aiPickSwitch(faintedPlayer);
+        if (idx !== null) {
+          setTimeout(() => {
+            state.battle.active[faintedPlayer] = idx;
+            addLog(`AI sent out ${activePokemon(faintedPlayer).name}!`, `log-p${faintedPlayer}`);
+            updateBattleUI();
+            state.battle.phase = 'select-move';
+            switchTurn();
+          }, 500);
+        }
+      } else {
+        // Human player's pokemon fainted — show switch UI
+        // In ai-2v2, determine which sub-player should pick
+        if (gameMode === 'ai-2v2') {
+          const sub = state.battle.active[1] < 6 ? 1 : 2;
+          showBattleHandoff(sub, () => {
+            showSwitchRequired(faintedPlayer, (idx) => {
+              state.battle.active[faintedPlayer] = idx;
+              addLog(`Sent out ${activePokemon(faintedPlayer).name}!`, `log-p${faintedPlayer}`);
+              updateBattleUI();
+              state.battle.phase = 'select-move';
+              switchTurn();
+            });
+          });
+        } else {
+          showSwitchRequired(faintedPlayer, (idx) => {
+            state.battle.active[faintedPlayer] = idx;
+            addLog(`Sent out ${activePokemon(faintedPlayer).name}!`, `log-p${faintedPlayer}`);
+            updateBattleUI();
+            state.battle.phase = 'select-move';
+            switchTurn();
+          });
+        }
+      }
+
     } else {
+      // Online modes
       const myBP = myBattlePlayer;
       if (OnlineGame.getIsHost()) {
         if (myBP === faintedPlayer) {
@@ -1252,7 +1408,7 @@ function showMoveButtons() {
     `;
     btn.addEventListener('click', () => {
       disableMoveButtons();
-      if (gameMode !== 'local') {
+      if (gameMode === 'online-1v1' || gameMode === 'online-2v2') {
         OnlineGame.sendMove(i);
         if (!OnlineGame.getIsHost()) { showOnlineWaiting(); return; }
       }
@@ -1273,11 +1429,11 @@ function showMoveButtons() {
       const oldPk = activePokemon(player);
       state.battle.active[player] = chosenIdx;
       addLog(`Player ${player} switched ${oldPk.name} → ${activePokemon(player).name}!`, `log-p${player}`);
-      if (gameMode !== 'local' && !OnlineGame.getIsHost()) {
+      if ((gameMode === 'online-1v1' || gameMode === 'online-2v2') && !OnlineGame.getIsHost()) {
         OnlineGame.sendSwitch(chosenIdx);
         showOnlineWaiting(); return;
       }
-      if (gameMode !== 'local' && OnlineGame.getIsHost()) {
+      if ((gameMode === 'online-1v1' || gameMode === 'online-2v2') && OnlineGame.getIsHost()) {
         OnlineGame.broadcastTurnResult(state.battle.log.slice(0,20), serializeBattleState());
       }
       updateBattleUI();
@@ -1297,9 +1453,22 @@ function disableMoveButtons() {
 function updateBattleUI() {
   updateFighterPanel(1);
   updateFighterPanel(2);
-  dom.battleTurnIndicator.textContent = gameMode === 'local'
-    ? `Player ${state.battle.turn}'s Turn`
-    : `Turn: Player ${state.battle.turn}`;
+  let turnLabel;
+  if (gameMode === 'local') {
+    turnLabel = `Player ${state.battle.turn}'s Turn`;
+  } else if (gameMode === 'ai-1v1') {
+    turnLabel = state.battle.turn === 1 ? 'Your Turn' : "🤖 AI's Turn";
+  } else if (gameMode === 'ai-2v2') {
+    if (state.battle.turn === 2) {
+      turnLabel = "🤖 AI's Turn";
+    } else {
+      const sub = state.battle.active[1] < 6 ? 1 : 2;
+      turnLabel = `Player ${sub}'s Turn`;
+    }
+  } else {
+    turnLabel = `Turn: Player ${state.battle.turn}`;
+  }
+  dom.battleTurnIndicator.textContent = turnLabel;
   dom.battleTurnIndicator.className = `turn-indicator p${state.battle.turn}-turn`;
 }
 
@@ -1357,7 +1526,8 @@ function endBattle(winner) {
   const user = Auth.getCurrentUser();
   if (user) {
     if (gameMode === 'local') {
-      // Update stats for both? We only know the logged-in user
+      Auth.updateStats(user.username, winner === 1 ? 'win' : 'loss');
+    } else if (gameMode === 'ai-1v1' || gameMode === 'ai-2v2') {
       Auth.updateStats(user.username, winner === 1 ? 'win' : 'loss');
     } else {
       const myBP = myBattlePlayer;
@@ -1367,9 +1537,24 @@ function endBattle(winner) {
 
   const loser    = winner === 1 ? 2 : 1;
   const winColor = winner === 1 ? 'var(--p1-color)' : 'var(--p2-color)';
-  dom.victoryTitle.textContent    = '🏆 Victory!';
-  dom.victoryWinner.innerHTML     = `<span style="color:${winColor}">Player ${winner}</span> Wins!`;
-  dom.victorySubtitle.textContent = `Player ${loser}'s team has been defeated!`;
+
+  if (gameMode === 'ai-1v1') {
+    dom.victoryTitle.textContent    = winner === 1 ? '🏆 You Win!' : '💀 AI Wins!';
+    dom.victoryWinner.innerHTML     = winner === 1
+      ? `<span style="color:var(--p1-color)">You</span> defeated the AI!`
+      : `<span style="color:var(--p2-color)">🤖 AI</span> defeated you!`;
+    dom.victorySubtitle.textContent = winner === 1 ? 'The AI has been crushed!' : 'Better luck next time!';
+  } else if (gameMode === 'ai-2v2') {
+    dom.victoryTitle.textContent    = winner === 1 ? '🏆 Humans Win!' : '🤖 AI Wins!';
+    dom.victoryWinner.innerHTML     = winner === 1
+      ? `<span style="color:var(--p1-color)">Human Team</span> wins!`
+      : `<span style="color:var(--p2-color)">AI Team</span> wins!`;
+    dom.victorySubtitle.textContent = winner === 1 ? 'The AI team has been defeated!' : 'The AI team was too strong!';
+  } else {
+    dom.victoryTitle.textContent    = '🏆 Victory!';
+    dom.victoryWinner.innerHTML     = `<span style="color:${winColor}">Player ${winner}</span> Wins!`;
+    dom.victorySubtitle.textContent = `Player ${loser}'s team has been defeated!`;
+  }
 
   dom.victoryTeamShowcase.innerHTML = '';
   state.teams[winner].forEach((pk, i) => {
