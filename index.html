@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pokemon Battle Arena</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ============================================================
+     LOGIN SCREEN  (first screen)
+     ============================================================ -->
+<div id="login-screen" class="screen active">
+  <div class="login-wrap">
+    <!-- Logo -->
+    <div class="login-logo-area">
+      <span style="font-size:3rem;display:block;margin-bottom:6px">⚡</span>
+      <h1 class="title-logo" style="font-size:2rem;margin-bottom:4px">POKEMON BATTLE ARENA</h1>
+      <p style="color:#666;font-size:0.85rem">All 1025 Pokemon · Online Multiplayer · Local 2-Player</p>
+    </div>
+
+    <!-- Auth Card -->
+    <div class="auth-card">
+      <!-- Tabs -->
+      <div class="auth-tabs">
+        <button class="auth-tab active" id="tab-login">Login</button>
+        <button class="auth-tab" id="tab-register">Register</button>
+      </div>
+
+      <!-- Login Form -->
+      <form class="auth-form" id="login-form">
+        <label class="auth-label">Username</label>
+        <input class="auth-input" id="login-username" type="text" placeholder="Your trainer name" autocomplete="username">
+        <label class="auth-label">Password</label>
+        <input class="auth-input" id="login-password" type="password" placeholder="Password" autocomplete="current-password">
+        <div class="auth-error hidden" id="login-error"></div>
+        <button type="submit" class="btn btn-primary" style="width:100%;margin-top:8px">Login</button>
+      </form>
+
+      <!-- Register Form (hidden by default) -->
+      <form class="auth-form hidden" id="register-form">
+        <label class="auth-label">Username <span style="color:#666;font-size:0.75rem">(3-20 chars, letters/numbers/_)</span></label>
+        <input class="auth-input" id="reg-username" type="text" placeholder="Choose a trainer name" autocomplete="username">
+        <label class="auth-label">Password <span style="color:#666;font-size:0.75rem">(min 4 chars)</span></label>
+        <input class="auth-input" id="reg-password" type="password" placeholder="Choose a password" autocomplete="new-password">
+        <label class="auth-label">Confirm Password</label>
+        <input class="auth-input" id="reg-confirm" type="password" placeholder="Repeat password" autocomplete="new-password">
+        <div class="auth-error hidden" id="reg-error"></div>
+        <button type="submit" class="btn btn-primary" style="width:100%;margin-top:8px">Create Account</button>
+      </form>
+    </div>
+
+    <p style="color:#444;font-size:0.75rem;margin-top:16px">Accounts saved locally in your browser</p>
+  </div>
+</div>
+
+<!-- ============================================================
+     MODE SELECTION SCREEN
+     ============================================================ -->
+<div id="mode-screen" class="screen">
+  <div class="mode-header">
+    <div class="mode-user-info">
+      <span class="mode-avatar">🏅</span>
+      <div>
+        <div class="mode-username" id="mode-username">Trainer</div>
+        <div class="mode-stats" id="mode-stats">W: 0 | L: 0 | Battles: 0</div>
+      </div>
+    </div>
+    <button class="btn btn-secondary btn-sm" id="logout-btn">Logout</button>
+  </div>
+
+  <div class="mode-body">
+    <h2 class="mode-title">Choose Your Battle Mode</h2>
+    <p class="mode-subtitle">Select how you want to play</p>
+
+    <div class="mode-cards">
+      <!-- Local 2-Player -->
+      <div class="mode-card" id="mode-local">
+        <div class="mode-card-icon">🖥️</div>
+        <div class="mode-card-title">Local 2-Player</div>
+        <div class="mode-card-desc">Both players on the same device. Take turns picking moves — no internet needed.</div>
+        <div class="mode-card-detail">2 players · Same device · 6 Pokemon each</div>
+        <button class="btn btn-primary mode-card-btn">Play Local</button>
+      </div>
+
+      <!-- 1v1 Online -->
+      <div class="mode-card" id="mode-online-1v1">
+        <div class="mode-card-icon">🌐</div>
+        <div class="mode-card-title">1v1 Online</div>
+        <div class="mode-card-desc">Battle a friend on a different device using a room code. Real-time peer-to-peer connection.</div>
+        <div class="mode-card-detail">2 players · Different devices · 6 Pokemon each</div>
+        <button class="btn btn-blue mode-card-btn">Play Online 1v1</button>
+      </div>
+
+      <!-- 2v2 Online -->
+      <div class="mode-card" id="mode-online-2v2">
+        <div class="mode-card-icon">👥</div>
+        <div class="mode-card-title">2v2 Online</div>
+        <div class="mode-card-desc">Two teammates vs two opponents across 4 devices. Each player picks 3 Pokemon — coordinate with your partner!</div>
+        <div class="mode-card-detail">4 players · 2 per team · 3 Pokemon each</div>
+        <button class="btn btn-red mode-card-btn">Play Online 2v2</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     ONLINE LOBBY SCREEN
+     ============================================================ -->
+<div id="online-lobby-screen" class="screen">
+  <div class="lobby-header">
+    <button class="btn btn-secondary btn-sm" id="lobby-back-btn">← Back</button>
+    <div class="lobby-mode-badge" id="lobby-mode-badge">1v1 Online</div>
+    <div style="width:80px"></div>
+  </div>
+
+  <div class="lobby-body">
+    <!-- Create / Join tabs -->
+    <div class="lobby-tabs">
+      <button class="lobby-tab active" id="lobby-tab-create">Create Game</button>
+      <button class="lobby-tab" id="lobby-tab-join">Join Game</button>
+    </div>
+
+    <!-- CREATE panel -->
+    <div class="lobby-panel" id="lobby-create-panel">
+      <p class="lobby-hint">Share this code with your friends:</p>
+      <div class="room-code-display" id="room-code-display">
+        <span id="room-code-text">Generating...</span>
+        <button class="btn btn-secondary btn-xs" id="copy-code-btn" title="Copy to clipboard">📋</button>
+      </div>
+      <p class="lobby-hint" id="lobby-waiting-msg">Waiting for players to join…</p>
+
+      <!-- Player slots display -->
+      <div class="lobby-slots" id="lobby-slots">
+        <!-- Slot rows inserted by JS -->
+      </div>
+
+      <button class="btn btn-gold" id="lobby-start-btn" disabled>
+        ⚔️ Start Battle!
+      </button>
+      <p class="lobby-hint" id="lobby-start-hint" style="color:#e74c3c">Waiting for all players before starting</p>
+    </div>
+
+    <!-- JOIN panel (hidden by default) -->
+    <div class="lobby-panel hidden" id="lobby-join-panel">
+      <label class="auth-label">Enter Room Code:</label>
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px">
+        <input class="auth-input" id="join-code-input" type="text" maxlength="6"
+          placeholder="e.g. AB3K7Z" style="letter-spacing:4px;text-transform:uppercase;font-size:1.2rem;text-align:center">
+        <button class="btn btn-blue" id="join-connect-btn">Connect</button>
+      </div>
+
+      <!-- 2v2 team picker (hidden for 1v1) -->
+      <div id="team-picker" class="hidden">
+        <label class="auth-label">Join as:</label>
+        <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+          <button class="btn team-pick-btn" data-team="A" style="flex:1;min-width:140px">
+            Team A (with host)
+          </button>
+          <button class="btn team-pick-btn" data-team="B" style="flex:1;min-width:140px">
+            Team B (opponents)
+          </button>
+        </div>
+      </div>
+
+      <div class="auth-error hidden" id="join-error"></div>
+      <div class="lobby-slots" id="join-lobby-slots"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     SELECTION SCREEN
+     ============================================================ -->
+<div id="selection-screen" class="screen">
+  <!-- Header -->
+  <div class="selection-header" id="selection-header">
+    <div class="player-badge" id="player-badge">
+      <span class="player-label" id="player-label">Player 1</span>
+      <span class="team-counter" id="team-counter">0/6 Selected</span>
+    </div>
+    <div class="selection-controls">
+      <input type="text" class="search-box" id="search-box" placeholder="🔍 Search Pokemon...">
+      <button class="btn btn-secondary btn-sm" id="random-team-btn">🎲 Random</button>
+      <button class="btn btn-secondary btn-sm" id="clear-team-btn">🗑 Clear</button>
+      <button class="btn btn-gold" id="confirm-ready-btn" disabled>
+        ✓ Lock Team &amp; Continue
+      </button>
+    </div>
+  </div>
+
+  <!-- Type Filter Row -->
+  <div class="filter-row" id="type-filter-row"></div>
+
+  <!-- Gen Filter Row -->
+  <div class="gen-filter-row">
+    <span class="gen-label">Gen:</span>
+    <div id="gen-filter-row" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+  </div>
+
+  <!-- Body: Grid + Team Panel -->
+  <div class="selection-body">
+    <div class="pokemon-grid-container">
+      <div class="pokemon-grid" id="pokemon-grid"></div>
+    </div>
+
+    <div class="team-panel">
+      <div class="team-panel-header" id="team-panel-title">Your Team</div>
+      <div class="team-slots" id="team-slots"></div>
+      <div class="team-panel-footer">
+        <div style="font-size:0.75rem;color:#666;text-align:center">Click a Pokemon to add/remove</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     BATTLE SCREEN
+     ============================================================ -->
+<div id="battle-screen" class="screen">
+  <div class="battle-header">
+    <div class="battle-title">⚔️ Pokemon Battle Arena</div>
+    <div class="turn-indicator" id="battle-turn-indicator">Player 1's Turn</div>
+    <div id="online-waiting-badge" class="hidden" style="font-size:0.8rem;color:#f7d02c;padding:4px 12px;background:rgba(247,208,44,0.1);border-radius:50px;border:1px solid rgba(247,208,44,0.3)">
+      ⏳ Waiting for opponent…
+    </div>
+    <div style="font-size:0.8rem;color:#555" id="battle-subtitle">HP · ATK · DEF</div>
+  </div>
+
+  <div class="battle-arena">
+    <!-- Player 1 Fighter Panel -->
+    <div class="fighter-panel p1" id="p1-fighter-panel">
+      <div class="fighter-header">
+        <span class="fighter-player-name" id="p1-player-label">Player 1</span>
+        <span class="fighter-poke-name" id="p1-name">-</span>
+      </div>
+      <div class="fighter-sprite-area">
+        <img class="fighter-sprite" id="p1-sprite" src="" alt="">
+      </div>
+      <div class="fighter-status" id="p1-status"></div>
+      <div id="p1-types" style="display:flex;gap:4px;flex-wrap:wrap;"></div>
+      <div class="hp-bar-container">
+        <div class="hp-label">
+          <span style="color:#aaa;font-size:0.7rem">HP</span>
+          <span class="hp-numbers" id="p1-hp-text">— / —</span>
+        </div>
+        <div class="hp-bar-track">
+          <div class="hp-bar-fill hp-high" id="p1-hp-bar" style="width:100%"></div>
+        </div>
+      </div>
+      <div class="fighter-stats">
+        <div class="stat-item"><div class="stat-label">ATK</div><div class="stat-value" id="p1-atk">—</div></div>
+        <div class="stat-item"><div class="stat-label">DEF</div><div class="stat-value" id="p1-def">—</div></div>
+        <div class="stat-item"><div class="stat-label">SPD</div><div class="stat-value" id="p1-spd">—</div></div>
+      </div>
+      <div>
+        <div style="font-size:0.7rem;color:#666;margin-bottom:4px;text-align:center">Team</div>
+        <div class="team-remaining" id="p1-remaining"></div>
+      </div>
+    </div>
+
+    <!-- VS Divider -->
+    <div class="vs-divider">
+      <div class="vs-text">VS</div>
+    </div>
+
+    <!-- Player 2 Fighter Panel -->
+    <div class="fighter-panel p2" id="p2-fighter-panel">
+      <div class="fighter-header">
+        <span class="fighter-poke-name" id="p2-name">-</span>
+        <span class="fighter-player-name" id="p2-player-label">Player 2</span>
+      </div>
+      <div class="fighter-sprite-area">
+        <img class="fighter-sprite" id="p2-sprite" src="" alt="">
+      </div>
+      <div class="fighter-status" id="p2-status"></div>
+      <div id="p2-types" style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end"></div>
+      <div class="hp-bar-container">
+        <div class="hp-label">
+          <span class="hp-numbers" id="p2-hp-text">— / —</span>
+          <span style="color:#aaa;font-size:0.7rem">HP</span>
+        </div>
+        <div class="hp-bar-track">
+          <div class="hp-bar-fill hp-high" id="p2-hp-bar" style="width:100%"></div>
+        </div>
+      </div>
+      <div class="fighter-stats">
+        <div class="stat-item"><div class="stat-label">ATK</div><div class="stat-value" id="p2-atk">—</div></div>
+        <div class="stat-item"><div class="stat-label">DEF</div><div class="stat-value" id="p2-def">—</div></div>
+        <div class="stat-item"><div class="stat-label">SPD</div><div class="stat-value" id="p2-spd">—</div></div>
+      </div>
+      <div>
+        <div style="font-size:0.7rem;color:#666;margin-bottom:4px;text-align:center">Team</div>
+        <div class="team-remaining" id="p2-remaining"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Battle Log -->
+  <div class="battle-log-container" id="battle-log"></div>
+
+  <!-- Move Selection Area -->
+  <div id="move-area" class="move-area">
+    <div class="move-area-title" id="move-area-title">Choose a move:</div>
+    <div class="moves-grid" id="moves-grid"></div>
+  </div>
+
+  <!-- Switch Pokemon Area -->
+  <div id="switch-area" class="switch-area hidden">
+    <div style="width:100%;text-align:center;font-size:0.9rem;color:#aaa;margin-bottom:8px">
+      Choose a Pokemon to switch in:
+    </div>
+    <div id="switch-pokemon" style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center"></div>
+  </div>
+</div>
+
+<!-- ============================================================
+     VICTORY SCREEN
+     ============================================================ -->
+<div id="victory-screen" class="screen">
+  <div class="victory-trophy">🏆</div>
+  <h1 class="victory-title" id="victory-title">Victory!</h1>
+  <h2 class="victory-winner" id="victory-winner">Player 1 Wins!</h2>
+  <p class="victory-subtitle" id="victory-subtitle"></p>
+  <div class="victory-team-showcase" id="victory-team-showcase"></div>
+  <div class="victory-buttons">
+    <button class="btn btn-gold" id="rematch-btn">🔄 Rematch</button>
+    <button class="btn btn-secondary" id="new-game-btn">🏠 Main Menu</button>
+  </div>
+</div>
+
+<!-- ============================================================
+     CONFIRM / HANDOFF OVERLAY (local mode only)
+     ============================================================ -->
+<div id="confirm-overlay" class="confirm-overlay hidden">
+  <div class="confirm-box">
+    <div style="font-size:3rem;margin-bottom:12px">🎮</div>
+    <p id="confirm-msg" style="margin-bottom:24px;line-height:1.6"></p>
+    <button id="confirm-btn" class="btn btn-primary">Ready!</button>
+  </div>
+</div>
+
+<!-- Scripts — order matters: data → auth → online → game -->
+<script src="pokemon-data.js"></script>
+<script src="auth.js"></script>
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+<script src="online.js"></script>
+<script src="game.js"></script>
+
+</body>
+</html>
