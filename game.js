@@ -723,7 +723,7 @@ function initSelectionScreen() {
 
     if (gameMode === 'ai-1v1') {
       // Human done — generate AI team and start
-      state.teams[2] = pickAiTeam(6);
+      state.teams[2] = pickAiTeam(6, state.teams[1]);
       showHandoffOverlay('battle', () => startBattle());
 
     } else if (gameMode === 'ai-2v2') {
@@ -733,7 +733,7 @@ function initSelectionScreen() {
       } else {
         // Both humans done — combine into team 1, generate AI team 2
         state.teams[1] = [...state.teams[1], ...state.teams[2]];
-        state.teams[2] = pickAiTeam(12);
+        state.teams[2] = pickAiTeam(12, state.teams[1]);
         showHandoffOverlay('battle', () => startBattle());
       }
 
@@ -771,9 +771,23 @@ function showHandoffOverlay(next, callback) {
 // ============================================================
 // ===  AI HELPERS  ===========================================
 // ============================================================
-function pickAiTeam(size) {
-  const shuffled = [...POKEMON_LIST].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, size).map(p => ({
+function pokemonBST(p) {
+  return p.maxHp + p.attack + p.defense + p.speed;
+}
+
+function pickAiTeam(size, referenceTeam) {
+  if (!referenceTeam || referenceTeam.length === 0) {
+    return [...POKEMON_LIST].sort(() => Math.random() - 0.5).slice(0, size)
+      .map(p => ({ ...p, moves: getMovesForPokemon(p.type1, p.type2) }));
+  }
+  const avgBST = referenceTeam.reduce((sum, p) => sum + pokemonBST(p), 0) / referenceTeam.length;
+  // Sort by closeness to player avg BST + small random noise for variety
+  const scored = POKEMON_LIST.map(p => ({
+    p,
+    score: Math.abs(pokemonBST(p) - avgBST) + Math.random() * avgBST * 0.15
+  }));
+  scored.sort((a, b) => a.score - b.score);
+  return scored.slice(0, size).map(({ p }) => ({
     ...p, moves: getMovesForPokemon(p.type1, p.type2)
   }));
 }
